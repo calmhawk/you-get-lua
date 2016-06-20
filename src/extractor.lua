@@ -1,10 +1,12 @@
 
-require extractor
+local http = require("socket.http")
 
-local youku = extractor:new()
+extractor = {}
 
-function youku.download(uri)
-    print("youku:" .. uri)
+function extractor:new()
+    o = {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
 end
 
-return youku
