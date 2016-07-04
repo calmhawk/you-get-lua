@@ -1,4 +1,6 @@
 
+local ltn12 = require "ltn12"
+
 local argparse = require "argparse"
 local version = 1.0
 
@@ -90,7 +92,7 @@ local SITES = {
     ["zhanqi"]           = "zhanqi",
 }
 
-function print_r ( t )  
+function print_r( t )  
     local print_r_cache={}
     local function sub_print_r(t,indent)
         if (print_r_cache[tostring(t)]) then
@@ -124,6 +126,13 @@ function print_r ( t )
     print()
 end
 
+function get_content(url, headers)
+    local http = require("socket.http")
+    local b = {}
+    local _,c,s,h = http.request{url=url, sink=ltn12.sink.table(b), headers=headers}
+    return table.concat(b), c, s, h
+end
+
 function download(url)
     local video_host = string.match(url, ".*://([^/]+)/")
     local video_uri = string.match(url, ".*://[^/]+/(.*)")
@@ -134,7 +143,8 @@ function download(url)
     local k = string.match(domain, "([^.]+)")
 
     local m = dofile(k .. ".lua")
-    m.download(video_uri)
+    m.prepare(video_uri)
+    m.extract()
 end
 
 function parse_args()
