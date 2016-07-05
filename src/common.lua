@@ -1,6 +1,7 @@
 
 local ltn12 = require "ltn12"
 
+local url = require("socket.url")
 local argparse = require "argparse"
 local version = 1.0
 
@@ -133,6 +134,113 @@ function get_content(url, headers)
     return table.concat(b), c, s, h
 end
 
+function hex_dump(buf)
+    for i=1,#buf do
+        if(buf:byte(i) > 126 or buf:byte(i) < 32) then
+            io.write(string.format('\\x%02x', buf:byte(i)))
+        else
+            io.write(string.char(buf:byte(i)))
+        end
+    end
+    io.write('\n')
+end
+
+function quoted(str, safe)
+    safe = '[^%w ]' .. safe
+    if (str) then
+        str = str:gsub("\n", "\r\n")
+        str = str:gsub(safe,
+        function (c) return string.format ("%%%02X", string.byte(c)) end)
+        str = str:gsub(" ", "+")
+    end
+    return str    
+end
+
+string.split = function(s, sep)
+    local rt= {}
+    s:gsub('[^'..sep..']+', function(w) table.insert(rt, w) end )
+    return rt
+end
+
+table.extend = function(t, tbl)
+    for _,e in pairs(tbl) do
+        table.insert(t, e)
+    end
+end
+
+function build_params(params)
+    local r = ''
+    for k,v in pairs(params) do
+        r = r .. k .. '=' .. url.escape(v) .. '&'
+    end
+    return r:sub(1,-2)
+end
+
+function parse_args()
+    local parser = argparse("script", "An example.")
+    parser:argument("urls", "origin video urls."):args("+")
+    parser:option("-V --version", "Print Version.", version)
+
+    local args = parser:parse()
+    return args['urls']
+end
+
+function exec(command)    
+    local pp = io.popen(command) 
+    local data = pp:read("*a")
+    pp:close()            
+   
+    return data           
+end
+
+function exists(name)
+    if type(name)~="string" then return false end
+    return os.rename(name,name) and true or false
+end
+
+function isfile(name)
+    if type(name)~="string" then return false end
+    if not exists(name) then return false end
+    local f = io.open(name)
+    if f then
+        f:close()
+        return true
+    end
+    return false
+end
+
+function isdir(name)
+    return (exists(name) and not isFile(name))
+end
+
+function dirname(str)
+    if str:match(".-/.-") then
+        local name = string.gsub(str, "(.*/)(.*)", "%1")
+        return name
+    else
+        return ''
+    end
+end
+
+function basename(str)
+    local name = string.gsub(str, "(.*/)(.*)", "%2")
+    return name
+end
+
+function filesize(path)
+    file = io.open(path, "r")
+    local size = file:seek("end")    -- get file size
+    io.close(file)
+    return size
+end
+
+function pathjoin(dir, base)
+    if string.sub(dir, -1) ~= "/" then
+        dir = dir .. "/"
+    end
+    return dir .. base
+end
+
 function download(url)
     local video_host = string.match(url, ".*://([^/]+)/")
     local video_uri = string.match(url, ".*://[^/]+/(.*)")
@@ -143,17 +251,9 @@ function download(url)
     local k = string.match(domain, "([^.]+)")
 
     local m = dofile(k .. ".lua")
-    m.prepare(video_uri)
-    m.extract()
-end
-
-function parse_args()
-    local parser = argparse("script", "An example.")
-    parser:argument("urls", "origin video urls."):args("+")
-    parser:option("-V --version", "Print Version.", version)
-
-    local args = parser:parse()
-    return args['urls']
+    local o = m:new()
+    o:seturi(video_uri)
+    o:start()
 end
 
 function download_urls(urls)
